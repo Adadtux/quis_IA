@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="pt-BR" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <style>
+* { font-family: 'Outfit', sans-serif; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+@keyframes scaleIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
+@keyframes confetti { 0% { transform:translateY(0) rotate(0); opacity:1; } 100% { transform:translateY(-120px) rotate(720deg); opacity:0; } }
+.fade-up { animation: fadeUp 0.5s ease both; }
+.scale-in { animation: scaleIn 0.4s ease both; }
+.option-btn { transition: all 0.2s ease; }
+.option-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
+.option-btn:disabled { cursor: default; }
+.progress-fill { transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+.confetti-particle { position:absolute; width:8px; height:8px; border-radius:2px; animation: confetti 1.5s ease both; pointer-events:none; }
+</style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full">
+  <div id="app" class="h-full w-full overflow-auto" style="background:#0f172a;">
+   <!-- TIMER -->
+   <div id="timer-bar" class="fixed top-0 left-0 right-0 bg-slate-900/80 border-b border-slate-700 backdrop-blur hidden z-50">
+    <div class="max-w-2xl mx-auto flex items-center justify-center py-3"><i data-lucide="clock" style="width:20px;height:20px;color:#ef4444;margin-right:8px;"></i> <span id="timer-display" class="text-2xl font-700 text-red-400 font-mono">30:00</span>
+    </div>
+   </div><!-- START SCREEN -->
+   <div id="screen-start" class="min-h-full flex items-center justify-center p-4">
+    <div class="max-w-lg w-full text-center fade-up">
+     <div class="mb-6">
+      <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-4" style="background:linear-gradient(135deg,#6366f1,#a855f7);">
+       <i data-lucide="brain" style="width:40px;height:40px;color:#fff;"></i>
+      </div>
+      <h1 id="title-text" class="text-3xl md:text-4xl font-800 text-white mb-2">Quiz de Inteligência Artificial</h1>
+      <p id="welcome-text" class="text-slate-400 text-lg">Teste seus conhecimentos sobre IA! Você tem 2 tentativas para obter a melhor nota.</p>
+     </div>
+     <div class="bg-slate-800/60 rounded-2xl p-6 backdrop-blur border border-slate-700/50 mb-4">
+      <label for="student-name" class="block text-left text-sm font-500 text-slate-300 mb-2">Seu nome completo</label> <input id="student-name" type="text" placeholder="Digite seu nome aqui..." class="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-600 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 text-lg">
+      <p id="name-error" class="text-red-400 text-sm mt-2 hidden">Por favor, digite seu nome para começar.</p>
+     </div>
+     <div class="flex gap-3 text-sm text-slate-500 justify-center mb-6">
+      <span class="flex items-center gap-1"><i data-lucide="help-circle" style="width:14px;height:14px;"></i> 25 perguntas</span> <span class="flex items-center gap-1"><i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i> 2 tentativas</span> <span class="flex items-center gap-1"><i data-lucide="award" style="width:14px;height:14px;"></i> Nota final</span>
+     </div><button onclick="startQuiz()" class="px-8 py-4 rounded-xl font-600 text-white text-lg option-btn" style="background:linear-gradient(135deg,#6366f1,#a855f7);width:100%;max-width:300px;"> Começar Quiz <i data-lucide="arrow-right" style="width:20px;height:20px;display:inline;vertical-align:middle;margin-left:4px;"></i> </button>
+    </div>
+   </div><!-- QUIZ SCREEN -->
+   <div id="screen-quiz" class="min-h-full flex flex-col p-4 hidden pt-20">
+    <div class="max-w-2xl w-full mx-auto flex-1 flex flex-col">
+     <!-- Header -->
+     <div class="flex items-center justify-between mb-4 pt-2">
+      <span id="attempt-badge" class="text-xs font-600 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300">1ª Tentativa</span> <span id="q-counter" class="text-sm text-slate-400 font-500">1 / 25</span>
+     </div><!-- Progress -->
+     <div class="w-full h-2 bg-slate-800 rounded-full mb-6 overflow-hidden">
+      <div id="progress-bar" class="h-full rounded-full progress-fill" style="width:0%;background:linear-gradient(90deg,#6366f1,#a855f7);"></div>
+     </div><!-- Question Card -->
+     <div id="question-card" class="bg-slate-800/60 rounded-2xl p-6 md:p-8 border border-slate-700/50 flex-1 flex flex-col scale-in">
+      <p id="q-number" class="text-indigo-400 font-600 text-sm mb-2">Pergunta 1</p>
+      <h2 id="q-text" class="text-white text-xl md:text-2xl font-600 mb-6 leading-relaxed"></h2>
+      <div id="options-container" class="space-y-3 flex-1"></div>
+      <div id="feedback-area" class="mt-4 hidden">
+       <div id="feedback-box" class="rounded-xl p-4 text-sm font-500"></div>
+      </div><button id="next-btn" onclick="nextQuestion()" class="mt-6 w-full py-3 rounded-xl font-600 text-white hidden option-btn" style="background:linear-gradient(135deg,#6366f1,#a855f7);"> Próxima Pergunta <i data-lucide="arrow-right" style="width:16px;height:16px;display:inline;vertical-align:middle;margin-left:4px;"></i> </button>
+     </div>
+    </div>
+   </div><!-- BETWEEN ATTEMPTS SCREEN -->
+   <div id="screen-between" class="min-h-full flex items-center justify-center p-4 hidden">
+    <div class="max-w-lg w-full text-center fade-up">
+     <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 bg-amber-500/20">
+      <i data-lucide="rotate-ccw" style="width:32px;height:32px;color:#f59e0b;"></i>
+     </div>
+     <h2 class="text-2xl md:text-3xl font-700 text-white mb-2">1ª Tentativa Concluída!</h2>
+     <p id="between-score" class="text-slate-400 text-lg mb-6"></p>
+     <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700/50 mb-6">
+      <p class="text-slate-300 mb-4">Deseja tentar novamente para melhorar sua nota?</p>
+      <p class="text-slate-500 text-sm">A melhor nota entre as duas tentativas será considerada.</p>
+     </div>
+     <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <button onclick="retryQuiz()" class="px-6 py-3 rounded-xl font-600 text-white option-btn" style="background:linear-gradient(135deg,#6366f1,#a855f7);"> <i data-lucide="rotate-ccw" style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:4px;"></i> Tentar Novamente </button> <button onclick="finishQuiz()" class="px-6 py-3 rounded-xl font-600 text-slate-300 border border-slate-600 option-btn hover:bg-slate-800"> Concluir <i data-lucide="check" style="width:16px;height:16px;display:inline;vertical-align:middle;margin-left:4px;"></i> </button>
+     </div>
+    </div>
+   </div><!-- RESULT SCREEN -->
+   <div id="screen-result" class="min-h-full flex items-center justify-center p-4 hidden">
+    <div class="max-w-lg w-full text-center fade-up">
+     <div id="confetti-container" class="relative"></div>
+     <div id="result-icon" class="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4"></div>
+     <h2 class="text-2xl md:text-3xl font-700 text-white mb-1">Resultado Final</h2>
+     <p id="result-name" class="text-indigo-400 font-500 text-lg mb-6"></p>
+     <div class="bg-slate-800/60 rounded-2xl p-8 border border-slate-700/50 mb-6">
+      <div id="result-score" class="text-6xl md:text-7xl font-800 mb-2" style="background:linear-gradient(135deg,#6366f1,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></div>
+      <p class="text-slate-400 text-sm mb-4">Nota Final (melhor tentativa)</p>
+      <div id="result-details" class="flex justify-center gap-6 text-sm"></div>
+     </div>
+     <div id="result-message" class="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30 mb-6">
+      <p id="result-msg-text" class="text-slate-300"></p>
+     </div><button onclick="restartAll()" class="px-6 py-3 rounded-xl font-600 text-slate-300 border border-slate-600 option-btn hover:bg-slate-800"> <i data-lucide="home" style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:4px;"></i> Voltar ao Início </button>
+    </div>
+   </div>
+  </div>
+  <script>
+const questions = [
+  { q:"Quando o YouTube sugere vídeos parecidos com os que você já assistiu, isso é um exemplo de:", opts:["Hackers monitorando seu celular","Inteligência Artificial aprendendo suas preferências","Falha do sistema","Vídeos aleatórios","Programação manual sem dados"], ans:1 },
+  { q:"O corretor automático do celular funciona porque:", opts:["Ele adivinha palavras sem base nenhuma","Usa regras fixas que nunca mudam","Aprende com padrões de linguagem","Copia palavras da internet em tempo real","É controlado por humanos digitando"], ans:2 },
+  { q:"Assistentes como a Alexa conseguem responder perguntas porque:", opts:["Decoram tudo manualmente","Usam Inteligência Artificial para entender comandos","São operados por pessoas escondidas","Só funcionam com perguntas exatas","Não usam dados"], ans:1 },
+  { q:"Quando um aplicativo de mapas sugere um caminho mais rápido, ele:", opts:["Escolhe uma rota aleatória","Usa IA analisando trânsito e histórico","Sempre escolhe o caminho mais longo","Funciona sem internet","Usa apenas sorte"], ans:1 },
+  { q:"O reconhecimento facial em celulares serve para:", opts:["Decorar rostos sem uso","Melhorar a bateria","Identificar a pessoa para desbloquear","Compartilhar fotos automaticamente","Enviar dados para redes sociais"], ans:2 },
+  { q:"Quando você digita algo no Google e ele completa a frase, isso é:", opts:["Coincidência","IA prevendo o que você quer escrever","Erro do sistema","Um vírus","Digitação automática sem lógica"], ans:1 },
+  { q:"A Inteligência Artificial aprende principalmente por:", opts:["Sorte","Tentativa única","Dados e exemplos","Opinião de pessoas","Adivinhação"], ans:2 },
+  { q:"Um chatbot como o ChatGPT consegue conversar porque:", opts:["Tem consciência humana","Foi programado para repetir frases fixas","Usa modelos de linguagem treinados com dados","Está conectado a uma pessoa real","Só responde perguntas simples"], ans:2 },
+  { q:"Quando a Netflix recomenda filmes, ela:", opts:["Escolhe aleatoriamente","Usa IA baseada no seu histórico","Mostra sempre os mesmos filmes","Usa apenas lançamentos","Ignora o usuário"], ans:1 },
+  { q:"O que é um algoritmo, de forma simples?", opts:["Um tipo de robô","Um vírus digital","Um conjunto de instruções para resolver um problema","Um aplicativo","Um banco de dados"], ans:2 },
+  { q:"Carros autônomos usam IA para:", opts:["Apenas tocar música","Dirigir sem intervenção humana","Trocar pneus automaticamente","Funcionar sem sensores","Ignorar o trânsito"], ans:1 },
+  { q:"Quando um banco detecta uma compra suspeita no seu cartão, ele pode usar:", opts:["Sorte","IA analisando comportamento de consumo","Apenas humanos","Um sistema offline","Regras fixas que nunca mudam"], ans:1 },
+  { q:"Deepfake é:", opts:["Um tipo de vírus","Um erro de câmera","Um conteúdo falso criado com IA (imagem ou vídeo)","Um aplicativo de edição comum","Um filtro de foto"], ans:2 },
+  { q:"Treinar uma IA significa:", opts:["Instalar um programa","Ensinar com dados e exemplos","Ligar o computador","Atualizar o sistema","Reiniciar o aparelho"], ans:1 },
+  { q:"Qual destes é um cuidado importante ao usar IA?", opts:["Confiar em tudo sem verificar","Nunca usar tecnologia","Verificar informações e fontes","Compartilhar dados pessoais livremente","Ignorar resultados"], ans:2 },
+  { q:"Quando você pede para o celular definir um alarme por voz, isso usa:", opts:["Rádio","Inteligência Artificial","Internet apenas","Bluetooth","Bateria extra"], ans:1 },
+  { q:"Quando o Instagram mostra posts que você gosta, ele está:", opts:["Mostrando qualquer coisa","Usando IA para entender seu gosto","Travando","Sendo controlado por pessoas","Mostrando anúncios aleatórios"], ans:1 },
+  { q:"Filtros de rosto em apps como o Instagram funcionam porque:", opts:["São desenhos prontos","Usam IA para reconhecer seu rosto","Não funcionam de verdade","Precisam de internet sempre","São fotos comuns"], ans:1 },
+  { q:"Quando você fala 'Ok Google' para o celular, ele:", opts:["Ignora você","Usa IA para reconhecer sua voz","Desliga o aparelho","Faz ligação automática","Apenas grava áudio"], ans:1 },
+  { q:"O que a IA faz em aplicativos de música como o Spotify?", opts:["Cria músicas ao vivo sempre","Sugere músicas que você pode gostar","Apaga músicas","Só toca rádio","Não usa IA"], ans:1 },
+  { q:"Quando o celular sugere palavras enquanto você digita, isso é:", opts:["Um erro","Inteligência Artificial","Vírus","Internet lenta","Configuração manual"], ans:1 },
+  { q:"Uma IA precisa de quê para aprender?", opts:["Energia elétrica apenas","Dados (informações)","Tela grande","Internet rápida","Teclado"], ans:1 },
+  { q:"Quando um aplicativo traduz frases automaticamente, ele usa:", opts:["Apenas dicionário","Inteligência Artificial","Papel digital","Pessoas traduzindo ao vivo","Câmera"], ans:1 },
+  { q:"O reconhecimento de voz serve para:", opts:["Desligar o celular","Entender o que você fala","Melhorar o som","Gravar vídeos","Aumentar volume"], ans:1 },
+  { q:"IA está presente em:", opts:["Apenas computadores antigos","Apenas robôs industriais","Muitos aplicativos do dia a dia","Apenas jogos","Nenhum lugar"], ans:2 },
+  { q:"Quando você recebe sugestões de compra em sites, isso acontece porque:", opts:["É sorte","IA analisa o que você viu antes","O site trava","Pessoas escolhem manualmente","É propaganda fixa"], ans:1 }
+];
+
+const letters = ['A','B','C','D','E'];
+let studentName = '';
+let currentQ = 0;
+let attempt = 1;
+let scores = [0, 0];
+let answered = false;
+let timerInterval = null;
+let timeRemaining = 30 * 60; // 30 minutos em segundos
+
+const defaultConfig = {
+  quiz_title: 'Quiz de Inteligência Artificial',
+  welcome_message: 'Teste seus conhecimentos sobre IA! Você tem 2 tentativas para obter a melhor nota.',
+  background_color: '#0f172a',
+  surface_color: '#1e293b',
+  text_color: '#f1f5f9',
+  primary_color: '#6366f1',
+  accent_color: '#a855f7',
+  font_family: 'Outfit',
+  font_size: 16
+};
+
+function applyConfig(config) {
+  const c = { ...defaultConfig, ...config };
+  const app = document.getElementById('app');
+  app.style.background = c.background_color;
+
+  document.getElementById('title-text').textContent = c.quiz_title;
+  document.getElementById('welcome-text').textContent = c.welcome_message;
+
+  const font = c.font_family || defaultConfig.font_family;
+  document.querySelectorAll('*').forEach(el => {
+    if (el.style) el.style.fontFamily = `${font}, Outfit, sans-serif`;
+  });
+
+  // Apply text color to key elements
+  document.querySelectorAll('.text-white').forEach(el => el.style.color = c.text_color);
+  document.querySelectorAll('.text-slate-400, .text-slate-300, .text-slate-500').forEach(el => {
+    el.style.color = c.text_color + 'aa';
+  });
+
+  // Cards surface color
+  document.querySelectorAll('.bg-slate-800\\/60').forEach(el => {
+    el.style.backgroundColor = c.surface_color + 'cc';
+  });
+
+  // Gradient buttons
+  document.querySelectorAll('[style*="linear-gradient(135deg"]').forEach(el => {
+    if (el.tagName === 'BUTTON' || el.classList.contains('option-btn')) {
+      el.style.background = `linear-gradient(135deg,${c.primary_color},${c.accent_color})`;
+    }
+  });
+}
+
+window.elementSdk.init({
+  defaultConfig,
+  onConfigChange: async (config) => applyConfig(config),
+  mapToCapabilities: (config) => ({
+    recolorables: [
+      { get: () => config.background_color || defaultConfig.background_color, set: v => { config.background_color = v; window.elementSdk.setConfig({ background_color: v }); } },
+      { get: () => config.surface_color || defaultConfig.surface_color, set: v => { config.surface_color = v; window.elementSdk.setConfig({ surface_color: v }); } },
+      { get: () => config.text_color || defaultConfig.text_color, set: v => { config.text_color = v; window.elementSdk.setConfig({ text_color: v }); } },
+      { get: () => config.primary_color || defaultConfig.primary_color, set: v => { config.primary_color = v; window.elementSdk.setConfig({ primary_color: v }); } },
+      { get: () => config.accent_color || defaultConfig.accent_color, set: v => { config.accent_color = v; window.elementSdk.setConfig({ accent_color: v }); } }
+    ],
+    borderables: [],
+    fontEditable: { get: () => config.font_family || defaultConfig.font_family, set: v => { config.font_family = v; window.elementSdk.setConfig({ font_family: v }); } },
+    fontSizeable: { get: () => config.font_size || defaultConfig.font_size, set: v => { config.font_size = v; window.elementSdk.setConfig({ font_size: v }); } }
+  }),
+  mapToEditPanelValues: (config) => new Map([
+    ['quiz_title', config.quiz_title || defaultConfig.quiz_title],
+    ['welcome_message', config.welcome_message || defaultConfig.welcome_message]
+  ])
+});
+
+function showScreen(id) {
+  ['screen-start','screen-quiz','screen-between','screen-result'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+function updateTimer() {
+  const mins = Math.floor(timeRemaining / 60);
+  const secs = timeRemaining % 60;
+  document.getElementById('timer-display').textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+  
+  if (timeRemaining <= 300) { // 5 minutos
+    document.getElementById('timer-display').style.color = '#ef4444';
+  }
+  
+  timeRemaining--;
+  
+  if (timeRemaining < 0) {
+    clearInterval(timerInterval);
+    endQuizByTimeout();
+  }
+}
+
+function startTimer() {
+  document.getElementById('timer-bar').classList.remove('hidden');
+  timeRemaining = 30 * 60;
+  updateTimer();
+  timerInterval = setInterval(updateTimer, 1000);
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  document.getElementById('timer-bar').classList.add('hidden');
+}
+
+function endQuizByTimeout() {
+  // Calcular score das respostas até o momento
+  scores[attempt - 1] = 0;
+  for (let i = 0; i <= currentQ && i < questions.length; i++) {
+    if (window.quizAnswers && window.quizAnswers[i] === questions[i].ans) {
+      scores[attempt - 1]++;
+    }
+  }
+  
+  stopTimer();
+  showResult();
+}
+
+function startQuiz() {
+  const input = document.getElementById('student-name');
+  const name = input.value.trim();
+  if (!name) {
+    document.getElementById('name-error').classList.remove('hidden');
+    input.focus();
+    return;
+  }
+  document.getElementById('name-error').classList.add('hidden');
+  studentName = name;
+  currentQ = 0;
+  scores[attempt - 1] = 0;
+  window.quizAnswers = {};
+  showScreen('screen-quiz');
+  startTimer();
+  renderQuestion();
+}
+
+function renderQuestion() {
+  const q = questions[currentQ];
+  document.getElementById('attempt-badge').textContent = attempt === 1 ? '1ª Tentativa' : '2ª Tentativa';
+  document.getElementById('q-counter').textContent = `${currentQ + 1} / ${questions.length}`;
+  document.getElementById('progress-bar').style.width = `${((currentQ) / questions.length) * 100}%`;
+  document.getElementById('q-number').textContent = `Pergunta ${currentQ + 1}`;
+  document.getElementById('q-text').textContent = q.q;
+  document.getElementById('feedback-area').classList.add('hidden');
+  document.getElementById('next-btn').classList.add('hidden');
+
+  const container = document.getElementById('options-container');
+  container.innerHTML = '';
+  q.opts.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn w-full text-left px-5 py-4 rounded-xl border border-slate-600 bg-slate-900/50 text-slate-200 font-500 flex items-center gap-3';
+    btn.innerHTML = `<span class="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-600 bg-slate-700 text-slate-300">${letters[i]}</span><span>${opt}</span>`;
+    
+    // Restore previous answer if exists
+    if (window.quizAnswers && window.quizAnswers[currentQ] === i) {
+      btn.classList.remove('border-slate-600','bg-slate-900/50','text-slate-200');
+      btn.classList.add('border-indigo-500','bg-indigo-500/20','text-indigo-300');
+      btn.querySelector('span').classList.remove('bg-slate-700','text-slate-300');
+      btn.querySelector('span').classList.add('bg-indigo-500','text-white');
+    }
+    
+    btn.onclick = () => selectAnswer(i);
+    container.appendChild(btn);
+  });
+
+  // Re-animate card
+  const card = document.getElementById('question-card');
+  card.classList.remove('scale-in');
+  void card.offsetWidth;
+  card.classList.add('scale-in');
+
+  lucide.createIcons();
+}
+
+function selectAnswer(idx) {
+  const btns = document.getElementById('options-container').children;
+  
+  // Remove selected state from all buttons
+  for (let i = 0; i < btns.length; i++) {
+    btns[i].classList.remove('border-indigo-500','bg-indigo-500/20','text-indigo-300');
+    btns[i].classList.add('border-slate-600','bg-slate-900/50','text-slate-200');
+    btns[i].querySelector('span').classList.remove('bg-indigo-500','text-white');
+    btns[i].querySelector('span').classList.add('bg-slate-700','text-slate-300');
+  }
+  
+  // Mark selected button
+  btns[idx].classList.remove('border-slate-600','bg-slate-900/50','text-slate-200');
+  btns[idx].classList.add('border-indigo-500','bg-indigo-500/20','text-indigo-300');
+  btns[idx].querySelector('span').classList.remove('bg-slate-700','text-slate-300');
+  btns[idx].querySelector('span').classList.add('bg-indigo-500','text-white');
+  
+  // Store current answer
+  if (!window.quizAnswers) window.quizAnswers = {};
+  window.quizAnswers[currentQ] = idx;
+  
+  // Hide feedback and show next button
+  document.getElementById('feedback-area').classList.add('hidden');
+  const nextBtn = document.getElementById('next-btn');
+  nextBtn.classList.remove('hidden');
+  nextBtn.textContent = currentQ < questions.length - 1 ? 'Próxima Pergunta →' : 'Ver Resultado →';
+}
+
+function nextQuestion() {
+  currentQ++;
+  if (currentQ >= questions.length) {
+    document.getElementById('progress-bar').style.width = '100%';
+    // Calcular score aqui
+    scores[attempt - 1] = 0;
+    for (let i = 0; i < questions.length; i++) {
+      if (window.quizAnswers[i] === questions[i].ans) {
+        scores[attempt - 1]++;
+      }
+    }
+    
+    if (attempt === 1) {
+      showBetween();
+    } else {
+      showResult();
+    }
+  } else {
+    renderQuestion();
+  }
+}
+
+function showBetween() {
+  const score = scores[0];
+  const pct = Math.round((score / questions.length) * 100);
+  document.getElementById('between-score').textContent = `Você acertou ${score} de ${questions.length} (${pct}%)`;
+  showScreen('screen-between');
+  lucide.createIcons();
+}
+
+function retryQuiz() {
+  attempt = 2;
+  currentQ = 0;
+  scores[1] = 0;
+  window.quizAnswers = {};
+  showScreen('screen-quiz');
+  startTimer();
+  renderQuestion();
+}
+
+function finishQuiz() {
+  showResult();
+}
+
+function showResult() {
+  const best = Math.max(scores[0], scores[1] || 0);
+  const pct = Math.round((best / questions.length) * 100);
+  const nota = (best / questions.length * 10).toFixed(1);
+
+  document.getElementById('result-name').textContent = studentName;
+  document.getElementById('result-score').textContent = nota;
+
+  const details = document.getElementById('result-details');
+  let detailsHTML = `<div class="text-center"><p class="text-2xl font-700 text-indigo-400">${scores[0]}/15</p><p class="text-slate-500">1ª Tentativa</p></div>`;
+  if (attempt === 2) {
+    detailsHTML += `<div class="text-center"><p class="text-2xl font-700 text-purple-400">${scores[1]}/15</p><p class="text-slate-500">2ª Tentativa</p></div>`;
+  }
+  details.innerHTML = detailsHTML;
+
+  const icon = document.getElementById('result-icon');
+  const msg = document.getElementById('result-msg-text');
+  if (pct >= 80) {
+    icon.style.background = 'rgba(16,185,129,0.2)';
+    icon.innerHTML = '<i data-lucide="trophy" style="width:40px;height:40px;color:#10b981;"></i>';
+    msg.textContent = '🎉 Excelente trabalho! Você demonstrou ótimo conhecimento sobre Inteligência Artificial!';
+    spawnConfetti();
+  } else if (pct >= 60) {
+    icon.style.background = 'rgba(245,158,11,0.2)';
+    icon.innerHTML = '<i data-lucide="thumbs-up" style="width:40px;height:40px;color:#f59e0b;"></i>';
+    msg.textContent = '👍 Bom trabalho! Você tem uma boa base, continue estudando para melhorar ainda mais!';
+  } else {
+    icon.style.background = 'rgba(99,102,241,0.2)';
+    icon.innerHTML = '<i data-lucide="book-open" style="width:40px;height:40px;color:#6366f1;"></i>';
+    msg.textContent = '📚 Continue estudando! A IA é um tema fascinante e você pode aprender muito mais sobre ela!';
+  }
+
+  showScreen('screen-result');
+  lucide.createIcons();
+}
+
+function spawnConfetti() {
+  const colors = ['#6366f1','#a855f7','#10b981','#f59e0b','#ef4444','#3b82f6'];
+  const container = document.getElementById('confetti-container');
+  container.innerHTML = '';
+  for (let i = 0; i < 30; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti-particle';
+    p.style.left = Math.random() * 100 + '%';
+    p.style.top = Math.random() * 40 + 60 + 'px';
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.animationDelay = Math.random() * 0.8 + 's';
+    p.style.animationDuration = 1 + Math.random() * 1 + 's';
+    container.appendChild(p);
+  }
+}
+
+function restartAll() {
+  attempt = 1;
+  currentQ = 0;
+  scores = [0, 0];
+  window.quizAnswers = {};
+  document.getElementById('student-name').value = '';
+  stopTimer();
+  showScreen('screen-start');
+  lucide.createIcons();
+}
+
+document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+</script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f41bccf426e7265',t:'MTc3NzUwMTY4My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
