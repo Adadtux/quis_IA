@@ -41,8 +41,14 @@
      <div class="bg-slate-800/60 rounded-2xl p-6 backdrop-blur border border-slate-700/50 mb-4"><label for="student-name" class="block text-left text-sm font-500 text-slate-300 mb-2">Seu nome completo</label> <input id="student-name" type="text" placeholder="Digite seu nome aqui..." class="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-600 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 text-lg">
       <p id="name-error" class="text-red-400 text-sm mt-2 hidden">Por favor, digite seu nome para começar.</p>
      </div>
+     <div class="bg-red-900/30 rounded-2xl p-4 border border-red-700/50 mb-6">
+      <p id="instructions-display" class="text-red-200 text-sm whitespace-pre-wrap leading-relaxed font-500"></p>
+     </div>
+     <div id="attempt-warning" class="bg-amber-900/30 rounded-2xl p-4 border border-amber-700/50 mb-6 hidden">
+      <p id="warning-text" class="text-amber-200 text-sm font-500"></p>
+     </div>
      <div class="flex gap-3 text-sm text-slate-500 justify-center mb-6"><span class="flex items-center gap-1"><i data-lucide="help-circle" style="width:14px;height:14px;"></i> 25 perguntas</span> <span class="flex items-center gap-1"><i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i> 2 tentativas</span> <span class="flex items-center gap-1"><i data-lucide="award" style="width:14px;height:14px;"></i> Nota final</span>
-     </div><button onclick="startQuiz()" class="px-8 py-4 rounded-xl font-600 text-white text-lg option-btn" style="background:linear-gradient(135deg,#6366f1,#a855f7);width:100%;max-width:300px;"> Começar Quiz <i data-lucide="arrow-right" style="width:20px;height:20px;display:inline;vertical-align:middle;margin-left:4px;"></i> </button>
+     </div><button id="start-btn" onclick="startQuiz()" class="px-8 py-4 rounded-xl font-600 text-white text-lg option-btn" style="background:linear-gradient(135deg,#6366f1,#a855f7);width:100%;max-width:300px;"> Começar Quiz <i data-lucide="arrow-right" style="width:20px;height:20px;display:inline;vertical-align:middle;margin-left:4px;"></i> </button>
     </div>
    </div><!-- QUIZ SCREEN -->
    <div id="screen-quiz" class="min-h-full flex flex-col p-4 hidden pt-20">
@@ -135,6 +141,7 @@ let timeRemaining = 30 * 60; // 30 minutos em segundos
 const defaultConfig = {
   quiz_title: 'Quiz de Inteligência Artificial',
   welcome_message: 'Teste seus conhecimentos sobre IA! Você tem 2 tentativas para obter a melhor nota.',
+  instructions_text: '⚠️ AVISO IMPORTANTE:\n\n• Você NÃO pode sair desta página durante o teste\n• Você NÃO pode abrir outras abas ou janelas\n• Você NÃO pode minimizar a janela\n• Se sair, o teste será encerrado automaticamente\n• Você terá apenas 2 tentativas no total\n• Tempo limite: 30 minutos',
   background_color: '#0f172a',
   surface_color: '#1e293b',
   text_color: '#f1f5f9',
@@ -143,6 +150,29 @@ const defaultConfig = {
   font_family: 'Outfit',
   font_size: 16
 };
+
+// Gera ID único do dispositivo/navegador
+function generateDeviceId() {
+  let deviceId = localStorage.getItem('deviceId');
+  if (!deviceId) {
+    deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('deviceId', deviceId);
+  }
+  return deviceId;
+}
+
+// Controla tentativas do teste
+function getAttemptTracker() {
+  const deviceId = generateDeviceId();
+  const key = `quiz_attempts_${deviceId}`;
+  const data = JSON.parse(localStorage.getItem(key)) || { attempts: 0, abandoned: 0, completed: false };
+  return { key, data };
+}
+
+function saveAttemptData(data) {
+  const { key } = getAttemptTracker();
+  localStorage.setItem(key, JSON.stringify(data));
+}
 
 function applyConfig(config) {
   const c = { ...defaultConfig, ...config };
@@ -193,9 +223,17 @@ window.elementSdk.init({
   }),
   mapToEditPanelValues: (config) => new Map([
     ['quiz_title', config.quiz_title || defaultConfig.quiz_title],
-    ['welcome_message', config.welcome_message || defaultConfig.welcome_message]
+    ['welcome_message', config.welcome_message || defaultConfig.welcome_message],
+    ['instructions_text', config.instructions_text || defaultConfig.instructions_text]
   ])
 });
+
+// Mostrar instruções na tela inicial
+function updateInstructionsDisplay() {
+  const config = window.elementSdk.config;
+  const instructions = config.instructions_text || defaultConfig.instructions_text;
+  document.getElementById('instructions-display').textContent = instructions;
+}
 
 function showScreen(id) {
   ['screen-start','screen-quiz','screen-between','screen-result'].forEach(s => {
@@ -264,8 +302,17 @@ function disableScreenLock() {
 function handleVisibilityChange() {
   if (document.hidden && currentQ > 0 && currentQ < questions.length) {
     // Aluno saiu da aba
+    const tracker = getAttemptTracker();
+    tracker.data.abandoned++;
+    saveAttemptData(tracker.data);
+    
+    const abandonedCount = tracker.data.abandoned;
+    const attemptInfo = abandonedCount === 1 
+      ? '⚠️ AVISO: Você tem apenas MAIS 1 chance de refazer a prova!' 
+      : '❌ Você já abandonou a prova ' + abandonedCount + ' vez(es). Limite atingido!';
+    
     endQuizByTimeout();
-    showWarningModal('⚠️ Teste Interrompido', 'Você saiu da janela do teste. O teste foi encerrado.');
+    showWarningModal('⚠️ Teste Interrompido', 'Você saiu da janela do teste. O teste foi encerrado.', attemptInfo);
   }
 }
 
@@ -298,21 +345,24 @@ function preventDragStart(e) {
   }
 }
 
-function showWarningModal(title, message) {
+function showWarningModal(title, message, attemptInfo = null) {
   const modal = document.createElement('div');
   modal.id = 'warning-modal';
   modal.className = 'fixed inset-0 bg-black/80 backdrop-blur flex items-center justify-center z-[9999]';
+  
+  let btnHTML = `<button onclick="document.getElementById('warning-modal').remove(); goBackToStart();" class="px-6 py-3 rounded-lg font-600 text-white" style="background:linear-gradient(135deg,#6366f1,#a855f7);">OK, Entendi</button>`;
+  
   modal.innerHTML = `
     <div class="bg-slate-800 rounded-2xl p-8 max-w-sm text-center border border-slate-700">
       <h3 class="text-2xl font-700 text-red-400 mb-3">${title}</h3>
-      <p class="text-slate-300 mb-6">${message}</p>
-      <p class="text-sm text-slate-500">O teste será encerrado automaticamente.</p>
+      <p class="text-slate-300 mb-4">${message}</p>
+      ${attemptInfo ? `<p class="text-sm text-amber-300 mb-4 font-600">${attemptInfo}</p>` : ''}
+      <div class="flex gap-3 justify-center">
+        ${btnHTML}
+      </div>
     </div>
   `;
   document.body.appendChild(modal);
-  
-  // Remove modal após 3 segundos
-  setTimeout(() => modal.remove(), 3000);
 }
 
 function endQuizByTimeout() {
@@ -329,6 +379,17 @@ function endQuizByTimeout() {
 }
 
 function startQuiz() {
+  // Verificar tentativas
+  const tracker = getAttemptTracker();
+  if (tracker.data.completed) {
+    showWarningModal('❌ Limite de Tentativas Atingido', 'Você já completou este teste. Não é permitido fazer novamente.');
+    return;
+  }
+  if (tracker.data.abandoned >= 2) {
+    showWarningModal('❌ Limite de Tentativas Atingido', 'Você abandonou o teste 2 vezes. Limite atingido. Não é permitido fazer novamente.');
+    return;
+  }
+  
   const input = document.getElementById('student-name');
   const name = input.value.trim();
   if (!name) {
@@ -443,6 +504,13 @@ function showBetween() {
 }
 
 function retryQuiz() {
+  // Verificar se pode fazer outra tentativa
+  const tracker = getAttemptTracker();
+  if (tracker.data.abandoned >= 2) {
+    showWarningModal('❌ Limite Atingido', 'Você já abandonou a prova 2 vezes. Não pode fazer outra tentativa.');
+    return;
+  }
+  
   attempt = 2;
   currentQ = 0;
   scores[1] = 0;
@@ -457,6 +525,11 @@ function finishQuiz() {
 }
 
 function showResult() {
+  // Marcar teste como completo
+  const tracker = getAttemptTracker();
+  tracker.data.completed = true;
+  saveAttemptData(tracker.data);
+  
   const best = Math.max(scores[0], scores[1] || 0);
   const pct = Math.round((best / questions.length) * 100);
   const nota = (best / questions.length * 10).toFixed(1);
@@ -465,9 +538,9 @@ function showResult() {
   document.getElementById('result-score').textContent = nota;
 
   const details = document.getElementById('result-details');
-  let detailsHTML = `<div class="text-center"><p class="text-2xl font-700 text-indigo-400">${scores[0]}/15</p><p class="text-slate-500">1ª Tentativa</p></div>`;
+  let detailsHTML = `<div class="text-center"><p class="text-2xl font-700 text-indigo-400">${scores[0]}/25</p><p class="text-slate-500">1ª Tentativa</p></div>`;
   if (attempt === 2) {
-    detailsHTML += `<div class="text-center"><p class="text-2xl font-700 text-purple-400">${scores[1]}/15</p><p class="text-slate-500">2ª Tentativa</p></div>`;
+    detailsHTML += `<div class="text-center"><p class="text-2xl font-700 text-purple-400">${scores[1]}/25</p><p class="text-slate-500">2ª Tentativa</p></div>`;
   }
   details.innerHTML = detailsHTML;
 
@@ -508,7 +581,39 @@ function spawnConfetti() {
   }
 }
 
-function restartAll() {
+function showSecondAttemptModal() {
+  const modal = document.createElement('div');
+  modal.id = 'second-attempt-modal';
+  modal.className = 'fixed inset-0 bg-black/80 backdrop-blur flex items-center justify-center z-[9999]';
+  
+  modal.innerHTML = `
+    <div class="bg-slate-800 rounded-2xl p-8 max-w-sm text-center border border-slate-700">
+      <h3 class="text-2xl font-700 text-amber-400 mb-3">⚠️ Última Chance</h3>
+      <p class="text-slate-300 mb-6">Você já realizou um teste. Você tem apenas mais uma chance para melhorar sua nota.</p>
+      <div class="flex flex-col gap-3">
+        <button onclick="document.getElementById('second-attempt-modal').remove(); retry2ndAttempt();" class="px-6 py-3 rounded-lg font-600 text-white" style="background:linear-gradient(135deg,#6366f1,#a855f7);">
+          2ª Tentativa
+        </button>
+        <button onclick="document.getElementById('second-attempt-modal').remove();" class="px-6 py-3 rounded-lg font-600 text-slate-300 border border-slate-600 hover:bg-slate-700">
+          Encerrar
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function retry2ndAttempt() {
+  attempt = 2;
+  currentQ = 0;
+  scores[1] = 0;
+  window.quizAnswers = {};
+  showScreen('screen-quiz');
+  startTimer();
+  renderQuestion();
+}
+
+function goBackToStart() {
   attempt = 1;
   currentQ = 0;
   scores = [0, 0];
@@ -516,10 +621,56 @@ function restartAll() {
   document.getElementById('student-name').value = '';
   stopTimer();
   showScreen('screen-start');
+  updateInstructionsDisplay();
+  
+  // Mostrar aviso se já abandonou uma vez
+  const tracker = getAttemptTracker();
+  if (tracker.data.abandoned === 1) {
+    document.getElementById('attempt-warning').classList.remove('hidden');
+    document.getElementById('warning-text').textContent = '⚠️ ATENÇÃO: Esta é sua ÚLTIMA tentativa! Se você sair ou abandonar novamente, o teste será encerrado e você não poderá fazê-lo novamente.';
+  } else {
+    document.getElementById('attempt-warning').classList.add('hidden');
+  }
+  
   lucide.createIcons();
 }
 
-document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+function restartAll() {
+  // Verificar se pode fazer outra tentativa
+  const tracker = getAttemptTracker();
+  
+  // Se completou, não deixa recomeçar
+  if (tracker.data.completed) {
+    showWarningModal('❌ Teste Concluído', 'Você já completou este teste. Não é permitido fazer novamente.');
+    return;
+  }
+  
+  // Se abandonou 2 vezes, não deixa recomeçar
+  if (tracker.data.abandoned >= 2) {
+    showWarningModal('❌ Limite Atingido', 'Você já abandonou a prova 2 vezes. Limite atingido. Não pode fazer novamente.');
+    return;
+  }
+  
+  // Se já tentou uma vez (scores[0] > 0), mostrar modal de segunda tentativa
+  if (scores[0] > 0) {
+    showSecondAttemptModal();
+    return;
+  }
+  
+  goBackToStart();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  lucide.createIcons();
+  updateInstructionsDisplay();
+  
+  // Mostrar aviso se já abandonou uma vez
+  const tracker = getAttemptTracker();
+  if (tracker.data.abandoned === 1) {
+    document.getElementById('attempt-warning').classList.remove('hidden');
+    document.getElementById('warning-text').textContent = '⚠️ ATENÇÃO: Esta é sua ÚLTIMA tentativa! Se você sair ou abandonar novamente, o teste será encerrado e você não poderá fazê-lo novamente.';
+  }
+});
 </script>
- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f7b4c18063c7265',t:'MTc3ODEwNTI0MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f7ba7a340dd7265',t:'MTc3ODEwODk5MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
